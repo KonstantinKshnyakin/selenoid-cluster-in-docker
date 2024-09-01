@@ -1,0 +1,85 @@
+services:
+
+  selenoid-node1:
+    container_name: 'selenoid-node1'
+    image: 'aerokube/selenoid:1.11.3'
+    networks:
+      - selenoid-nw
+      - selenoid-nw1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./browsers.json:/etc/selenoid/browsers.json:ro
+    command:
+      - '-container-network=selenoid-nw1'
+      - '-limit=5'
+
+  selenoid-node2:
+    container_name: 'selenoid-node2'
+    image: 'aerokube/selenoid:1.11.3'
+    networks:
+      - selenoid-nw
+      - selenoid-nw2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./browsers.json:/etc/selenoid/browsers.json:ro
+    command:
+      - '-container-network=selenoid-nw2'
+      - '-limit=5'
+
+  ggr:
+    container_name: 'ggr'
+    image: 'aerokube/ggr:1.7.2'
+    depends_on:
+      - selenoid-node1
+      - selenoid-node2
+    networks:
+      - selenoid-nw
+    volumes:
+      - ./grid-router:/etc/grid-router:ro
+    command:
+      - '-guests-allowed'
+      - '-guests-quota=user'
+      - '-verbose'
+      - '-quotaDir=/etc/grid-router/quota'
+
+  ggr-ui:
+    container_name: 'ggr-ui'
+    image: 'aerokube/ggr-ui:1.2.0'
+    depends_on:
+      - selenoid-node1
+      - selenoid-node2
+    networks:
+      - selenoid-nw
+    volumes:
+      - ./grid-router/quota:/etc/grid-router/quota:ro
+
+  selenoid-ui:
+    container_name: 'selenoid-ui'
+    image: 'aerokube/selenoid-ui:1.10.11'
+    depends_on:
+      - ggr-ui
+    networks:
+      - selenoid-nw
+    command:
+      - '--selenoid-uri=http://ggr-ui:8888'
+
+  nginx:
+    container_name: 'nginx'
+    image: 'nginx:stable-alpine3.20'
+    depends_on:
+      - selenoid-ui
+      - ggr
+    networks:
+      - selenoid-nw
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx:/etc/nginx/conf.d:ro
+
+networks:
+  selenoid-nw:
+    name: 'selenoid-nw'
+  selenoid-nw1:
+    name: 'selenoid-nw1'
+  selenoid-nw2:
+    name: 'selenoid-nw2'
